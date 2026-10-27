@@ -3,6 +3,7 @@ import { apiUrl } from "../api";
 
 function Login({ onLogin, onCancel }) {
   const [isRegister, setIsRegister] = useState(false);
+  const [isAdminLogin, setIsAdminLogin] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [name, setName] = useState("");
@@ -14,7 +15,10 @@ function Login({ onLogin, onCancel }) {
 
     setErrorMessage("");
     setSubmitting(true);
-    const url = apiUrl(`/api/auth/${isRegister ? "register" : "login"}`);
+
+    const url = apiUrl(
+      `/api/auth/${isRegister ? "register" : "login"}`
+    );
 
     const body = isRegister
       ? { name, email, password, role: "USER" }
@@ -24,17 +28,28 @@ function Login({ onLogin, onCancel }) {
       const response = await fetch(url, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
 
       const responseText = await response.text();
+
       let data = {};
-      try { data = responseText ? JSON.parse(responseText) : {}; } catch { data = {}; }
+
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = {};
+      }
 
       if (!response.ok) {
-        setErrorMessage(data.message || data.error || responseText || `Request failed (${response.status})`);
+        setErrorMessage(
+          data.message ||
+            data.error ||
+            responseText ||
+            `Request failed (${response.status})`
+        );
         return;
       }
 
@@ -44,17 +59,46 @@ function Login({ onLogin, onCancel }) {
         setName("");
         setEmail("");
         setPassword("");
-      } else {
-        localStorage.setItem("PlanKaroUser", JSON.stringify(data));
-        localStorage.removeItem("venuevistaUser");
-        onLogin(data);
+        return;
       }
+
+      // Check the role returned by the backend.
+      const role = String(data.role || "").toUpperCase();
+
+      if (isAdminLogin && role !== "ADMIN") {
+        setErrorMessage(
+          "Access denied. Please use an administrator account."
+        );
+        return;
+      }
+
+      if (!isAdminLogin && role === "ADMIN") {
+        setErrorMessage(
+          "This is an administrator account. Please select Admin Login."
+        );
+        return;
+      }
+
+      localStorage.setItem("PlanKaroUser", JSON.stringify(data));
+      localStorage.removeItem("venuevistaUser");
+
+      onLogin(data);
     } catch (error) {
       console.error("Authentication request failed:", error);
-      setErrorMessage("Cannot connect to the backend. Start the Spring Boot server on port 8080 and try again.");
+
+      setErrorMessage(
+        "Cannot connect to the backend. Start the Spring Boot server on port 8080 and try again."
+      );
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const switchLoginMode = (adminMode) => {
+    setIsAdminLogin(adminMode);
+    setIsRegister(false);
+    setErrorMessage("");
+    setPassword("");
   };
 
   return (
@@ -71,23 +115,89 @@ function Login({ onLogin, onCancel }) {
           </div>
 
           <div className="login-card">
+            {/* Login mode toggle */}
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                padding: "5px",
+                marginBottom: "24px",
+                borderRadius: "12px",
+                background: "rgba(127, 127, 127, 0.12)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => switchLoginMode(false)}
+                style={{
+                  flex: 1,
+                  padding: "11px 8px",
+                  border: "none",
+                  borderRadius: "9px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  background: !isAdminLogin ? "#ffffff" : "transparent",
+                  color: !isAdminLogin ? "#202020" : "inherit",
+                  boxShadow: !isAdminLogin
+                    ? "0 2px 8px rgba(0,0,0,0.10)"
+                    : "none",
+                }}
+              >
+                👤 User Login
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchLoginMode(true)}
+                style={{
+                  flex: 1,
+                  padding: "11px 8px",
+                  border: "none",
+                  borderRadius: "9px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  background: isAdminLogin ? "#252525" : "transparent",
+                  color: isAdminLogin ? "#ffffff" : "inherit",
+                  boxShadow: isAdminLogin
+                    ? "0 2px 8px rgba(0,0,0,0.15)"
+                    : "none",
+                }}
+              >
+                🛡️ Admin Login
+              </button>
+            </div>
+
             <div className="login-card-header">
               <p className="login-label">
-                {isRegister ? "JOIN PLANKARO" : "WELCOME BACK"}
+                {isAdminLogin
+                  ? "ADMINISTRATOR ACCESS"
+                  : isRegister
+                    ? "JOIN PLANKARO"
+                    : "WELCOME BACK"}
               </p>
 
               <h1>
-                {isRegister ? "Create your account." : "Your next experience awaits."}
+                {isAdminLogin
+                  ? "Welcome, Administrator."
+                  : isRegister
+                    ? "Create your account."
+                    : "Your next experience awaits."}
               </h1>
 
               <p className="login-description">
-                {isRegister
-                  ? "Create an account and start discovering unforgettable events."
-                  : "Sign in to discover events, reserve your seats and manage your bookings."}
+                {isAdminLogin
+                  ? "Sign in with your administrator account to manage PlanKaro."
+                  : isRegister
+                    ? "Create an account and start discovering unforgettable events."
+                    : "Sign in to discover events, reserve your seats and manage your bookings."}
               </p>
             </div>
 
-            {errorMessage && <p className="login-error" role="alert">{errorMessage}</p>}
+            {errorMessage && (
+              <p className="login-error" role="alert">
+                {errorMessage}
+              </p>
+            )}
 
             <form onSubmit={handleSubmit}>
               {isRegister && (
@@ -128,25 +238,52 @@ function Login({ onLogin, onCancel }) {
                 />
               </div>
 
-              <button className="login-submit" type="submit" disabled={submitting}>
-                {submitting ? "Please wait..." : (isRegister ? "Create Account" : "Sign In")}
+              <button
+                className="login-submit"
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting
+                  ? "Please wait..."
+                  : isAdminLogin
+                    ? "Admin Sign In"
+                    : isRegister
+                      ? "Create Account"
+                      : "Sign In"}
+
                 <span>→</span>
               </button>
             </form>
 
-            <div className="login-switch">
-              <span>
-                {isRegister
-                  ? "Already have an account?"
-                  : "New to PlanKaro?"}
-              </span>
+            {!isAdminLogin && (
+              <div className="login-switch">
+                <span>
+                  {isRegister
+                    ? "Already have an account?"
+                    : "New to PlanKaro?"}
+                </span>
 
-              <button type="button" onClick={() => { setErrorMessage(""); setIsRegister(!isRegister); }}>
-                {isRegister ? "Sign In" : "Create Account"}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage("");
+                    setIsRegister(!isRegister);
+                  }}
+                >
+                  {isRegister ? "Sign In" : "Create Account"}
+                </button>
+              </div>
+            )}
+
+            {onCancel && (
+              <button
+                className="login-back"
+                type="button"
+                onClick={onCancel}
+              >
+                ← Back to events
               </button>
-            </div>
-
-            {onCancel && <button className="login-back" type="button" onClick={onCancel}>← Back to events</button>}
+            )}
 
             <div className="login-security">
               <span>✓</span>
