@@ -8,7 +8,12 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/venues")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "https://plan-karo-app.vercel.app"
+})
 public class VenueController {
 
     private final VenueRepository venueRepository;
